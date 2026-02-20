@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +19,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+
+function fireCelebration() {
+  const count = 80;
+  const defaults = { origin: { y: 0.7 }, zIndex: 9999 };
+  function fire(particleRatio: number, opts: confetti.Options) {
+    confetti({ ...defaults, ...opts, particleCount: Math.floor(count * particleRatio) });
+  }
+  fire(0.25, { spread: 26, startVelocity: 55 });
+  fire(0.2, { spread: 60 });
+  fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+  fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+  fire(0.1, { spread: 120, startVelocity: 45 });
+}
 
 const CATEGORIES = [
   { value: "random", label: "Random" },
@@ -43,6 +58,14 @@ export default function Home() {
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [roundComplete, setRoundComplete] = useState(false);
+  const nextRoundTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (nextRoundTimeoutRef.current) clearTimeout(nextRoundTimeoutRef.current);
+    };
+  }, []);
 
   const fetchRoundOptions = useCallback(async () => {
     setError(null);
@@ -79,6 +102,7 @@ export default function Home() {
   const handleOptionClick = useCallback(
     (option: string) => {
       if (!options || currentRoundChoices.length >= numPlayers) return;
+      fireCelebration();
       const playerIndex = currentRoundChoices.length + 1;
       const newChoices: RoundChoice[] = [...currentRoundChoices, { playerIndex, option }];
       setCurrentRoundChoices(newChoices);
@@ -86,17 +110,23 @@ export default function Home() {
       if (newChoices.length === numPlayers) {
         const result: RoundResult = { round: currentRound, choices: newChoices };
         setRoundResults((prev) => [...prev, result]);
+        setRoundComplete(true);
 
-        if (currentRound >= numRounds) {
-          setGameState("summary");
-          setOptions(null);
+        if (nextRoundTimeoutRef.current) clearTimeout(nextRoundTimeoutRef.current);
+        nextRoundTimeoutRef.current = setTimeout(() => {
+          nextRoundTimeoutRef.current = null;
+          setRoundComplete(false);
+          if (currentRound >= numRounds) {
+            setGameState("summary");
+            setOptions(null);
+            setCurrentRoundChoices([]);
+            return;
+          }
+          setCurrentRound((r) => r + 1);
           setCurrentRoundChoices([]);
-          return;
-        }
-        setCurrentRound((r) => r + 1);
-        setCurrentRoundChoices([]);
-        setOptions(null);
-        fetchRoundOptions();
+          setOptions(null);
+          fetchRoundOptions();
+        }, 1500);
       }
     },
     [options, currentRoundChoices, numPlayers, currentRound, numRounds, fetchRoundOptions]
@@ -120,7 +150,15 @@ export default function Home() {
           </p>
         </div>
 
+        <AnimatePresence mode="wait">
         {gameState === "settings" && (
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
+          >
           <Card>
             <CardHeader>
               <CardTitle>Setup</CardTitle>
@@ -192,9 +230,17 @@ export default function Home() {
               </Button>
             </CardContent>
           </Card>
+          </motion.div>
         )}
 
         {gameState === "playing" && (
+          <motion.div
+            key="playing"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+          >
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
               <div>
@@ -206,6 +252,11 @@ export default function Home() {
             </CardHeader>
             <CardContent className="space-y-4">
               {error && <p className="text-sm text-destructive">{error}</p>}
+              {roundComplete && (
+                <p className="text-center text-sm font-medium text-muted-foreground">
+                  Ronde selesai! Next round in 1.5s…
+                </p>
+              )}
               {loading && (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   {Array.from({ length: numOptions }).map((_, i) => (
@@ -214,7 +265,7 @@ export default function Home() {
                 </div>
               )}
               {!loading && options && options.length > 0 && (
-                <div
+                <motion.div
                   className="grid gap-3 sm:grid-cols-2"
                   style={{
                     gridTemplateColumns:
@@ -224,32 +275,83 @@ export default function Home() {
                           ? "repeat(2, 1fr)"
                           : "repeat(3, 1fr)",
                   }}
+                  initial="hidden"
+                  animate="visible"
+                  variants={{
+                    visible: {
+                      transition: { staggerChildren: 0.06, delayChildren: 0.05 },
+                    },
+                    hidden: {},
+                  }}
                 >
-                  {options.map((opt, idx) => {
-                    const chosen = currentRoundChoices.find((c) => c.option === opt);
-                    return (
-                      <Button
-                        key={idx}
-                        variant={chosen ? "default" : "outline"}
-                        size="lg"
-                        className="min-h-16 text-base"
-                        onClick={() => handleOptionClick(opt)}
-                        disabled={currentRoundChoices.length >= numPlayers}
-                      >
-                        <span className="text-center">{opt}</span>
-                        {chosen && (
-                          <span className="ml-2 text-xs opacity-90">P{chosen.playerIndex}</span>
-                        )}
-                      </Button>
-                    );
-                  })}
-                </div>
+                  <AnimatePresence mode="wait">
+                    {options.map((opt, idx) => {
+                      const chosenBy = currentRoundChoices.filter((c) => c.option === opt);
+                      const isChosen = chosenBy.length > 0;
+                      return (
+                        <motion.div
+                          key={`${currentRound}-${idx}-${opt}`}
+                          variants={{
+                            hidden: { opacity: 0, y: 24, scale: 0.9 },
+                            visible: {
+                              opacity: 1,
+                              y: 0,
+                              scale: 1,
+                              transition: { type: "spring", stiffness: 400, damping: 24 },
+                            },
+                          }}
+                        >
+                          <motion.div
+                            whileHover={currentRoundChoices.length < numPlayers ? { scale: 1.03 } : {}}
+                            whileTap={currentRoundChoices.length < numPlayers ? { scale: 0.97 } : {}}
+                            animate={isChosen ? { scale: [1, 1.08, 1], boxShadow: ["0 0 0 0 rgba(0,0,0,0)", "0 0 0 8px rgba(255,200,0,0.4)", "0 0 0 0 rgba(0,0,0,0)"] } : {}}
+                            transition={{ duration: 0.4, ease: "easeOut" }}
+                            className="relative"
+                          >
+                            <Button
+                              variant={isChosen ? "default" : "outline"}
+                              size="lg"
+                              className="min-h-16 w-full text-base"
+                              onClick={() => handleOptionClick(opt)}
+                              disabled={currentRoundChoices.length >= numPlayers}
+                            >
+                              <span className="text-center">{opt}</span>
+                              <span className="ml-2 flex flex-wrap items-center justify-center gap-1">
+                                <AnimatePresence>
+                                  {chosenBy.map((c) => (
+                                    <motion.span
+                                      key={c.playerIndex}
+                                      initial={{ scale: 0, rotate: -20 }}
+                                      animate={{ scale: 1, rotate: 0 }}
+                                      exit={{ scale: 0 }}
+                                      transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                                      className="inline-flex rounded-full bg-white/30 px-2 py-0.5 text-xs font-bold"
+                                    >
+                                      P{c.playerIndex}!
+                                    </motion.span>
+                                  ))}
+                                </AnimatePresence>
+                              </span>
+                            </Button>
+                          </motion.div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </motion.div>
               )}
             </CardContent>
           </Card>
+          </motion.div>
         )}
 
         {gameState === "summary" && (
+          <motion.div
+            key="summary"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
           <Card>
             <CardHeader>
               <CardTitle>Ringkasan</CardTitle>
@@ -273,7 +375,9 @@ export default function Home() {
               </Button>
             </CardContent>
           </Card>
+          </motion.div>
         )}
+        </AnimatePresence>
       </main>
     </div>
   );

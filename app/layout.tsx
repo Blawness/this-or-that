@@ -25,9 +25,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
       >
-        {children}
+        <main className="flex-1">{children}</main>
+        <footer className="py-4 text-center text-sm text-muted-foreground">
+          Made by Yudha with &lt;3
+        </footer>
       </body>
     </html>
   );
