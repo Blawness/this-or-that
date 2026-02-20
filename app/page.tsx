@@ -20,6 +20,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useSound } from "@/hooks/use-sound";
+import { clickSoftSound } from "@/lib/click-soft";
+import { successChimeSound } from "@/lib/success-chime";
 
 function fireCelebration() {
   const count = 80;
@@ -48,12 +51,16 @@ type GameState = "settings" | "playing" | "summary";
 type GameType = "thisOrThat" | "wouldYouRather";
 
 export default function Home() {
+  const [playClick] = useSound(clickSoftSound);
+  const [playSuccess] = useSound(successChimeSound);
+
   const [gameType, setGameType] = useState<GameType>("thisOrThat");
   const [gameState, setGameState] = useState<GameState>("settings");
   const [category, setCategory] = useState<string>("random");
   const [numOptions, setNumOptions] = useState<number>(4);
   const [numRounds, setNumRounds] = useState<number>(5);
   const [numPlayers, setNumPlayers] = useState<number>(2);
+  const [timerSeconds, setTimerSeconds] = useState<number>(5);
 
   const [currentRound, setCurrentRound] = useState(1);
   const [options, setOptions] = useState<string[] | null>(null);
@@ -62,11 +69,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [roundComplete, setRoundComplete] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const nextRoundTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     return () => {
       if (nextRoundTimeoutRef.current) clearTimeout(nextRoundTimeoutRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, []);
 
@@ -93,6 +103,63 @@ export default function Home() {
     }
   }, [category, numOptions, gameType]);
 
+  const goToNextRound = useCallback(() => {
+    setRoundComplete(false);
+    setTimeLeft(null);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    if (currentRound >= numRounds) {
+      setGameState("summary");
+      setOptions(null);
+      setCurrentRoundChoices([]);
+      return;
+    }
+    setCurrentRound((r) => r + 1);
+    setCurrentRoundChoices([]);
+    setOptions(null);
+    fetchRoundOptions();
+  }, [currentRound, numRounds, fetchRoundOptions]);
+
+  useEffect(() => {
+    if (gameState !== "playing" || loading || !options || options.length === 0 || roundComplete) return;
+    setTimeLeft(timerSeconds);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t === null || t <= 1) {
+          if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+          }
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    };
+  }, [gameState, loading, options?.length, roundComplete, timerSeconds]);
+
+  useEffect(() => {
+    if (gameState !== "playing" || timeLeft !== 0 || roundComplete) return;
+    playSuccess();
+    const choices = currentRoundChoices;
+    const result: RoundResult = { round: currentRound, choices };
+    setRoundResults((prev) => [...prev, result]);
+    setRoundComplete(true);
+    if (nextRoundTimeoutRef.current) clearTimeout(nextRoundTimeoutRef.current);
+    nextRoundTimeoutRef.current = setTimeout(() => {
+      nextRoundTimeoutRef.current = null;
+      goToNextRound();
+    }, 1500);
+  }, [gameState, timeLeft, roundComplete, currentRound, currentRoundChoices, goToNextRound, playSuccess]);
+
   const startGame = useCallback(() => {
     setGameState("playing");
     setCurrentRound(1);
@@ -100,18 +167,28 @@ export default function Home() {
     setCurrentRoundChoices([]);
     setOptions(null);
     setError(null);
+    setTimeLeft(null);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = null;
     fetchRoundOptions();
   }, [fetchRoundOptions]);
 
   const handleOptionClick = useCallback(
     (option: string) => {
       if (!options || currentRoundChoices.length >= numPlayers) return;
+      playClick();
       fireCelebration();
       const playerIndex = currentRoundChoices.length + 1;
       const newChoices: RoundChoice[] = [...currentRoundChoices, { playerIndex, option }];
       setCurrentRoundChoices(newChoices);
 
       if (newChoices.length === numPlayers) {
+        playSuccess();
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+        setTimeLeft(null);
         const result: RoundResult = { round: currentRound, choices: newChoices };
         setRoundResults((prev) => [...prev, result]);
         setRoundComplete(true);
@@ -119,21 +196,11 @@ export default function Home() {
         if (nextRoundTimeoutRef.current) clearTimeout(nextRoundTimeoutRef.current);
         nextRoundTimeoutRef.current = setTimeout(() => {
           nextRoundTimeoutRef.current = null;
-          setRoundComplete(false);
-          if (currentRound >= numRounds) {
-            setGameState("summary");
-            setOptions(null);
-            setCurrentRoundChoices([]);
-            return;
-          }
-          setCurrentRound((r) => r + 1);
-          setCurrentRoundChoices([]);
-          setOptions(null);
-          fetchRoundOptions();
+          goToNextRound();
         }, 1500);
       }
     },
-    [options, currentRoundChoices, numPlayers, currentRound, numRounds, fetchRoundOptions]
+    [options, currentRoundChoices, numPlayers, currentRound, goToNextRound, playClick, playSuccess]
   );
 
   const playAgain = useCallback(() => {
@@ -291,6 +358,21 @@ export default function Home() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Timer per ronde (3–10 detik)</label>
+                <Select value={String(timerSeconds)} onValueChange={(v) => setTimerSeconds(Number(v))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n} detik
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button onClick={startGame} size="lg" className="w-full">
                 Mulai main
               </Button>
@@ -310,7 +392,17 @@ export default function Home() {
           <Card className="card-glow border-primary/10">
             <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
               <div>
-                <CardTitle>Ronde {currentRound} / {numRounds}</CardTitle>
+                <CardTitle className="flex flex-wrap items-center gap-2">
+                  Ronde {currentRound} / {numRounds}
+                  {timeLeft !== null && !roundComplete && (
+                    <span className={cn(
+                      "rounded-full px-2.5 py-0.5 text-sm font-medium tabular-nums",
+                      timeLeft <= 2 ? "bg-destructive/20 text-destructive" : "bg-muted text-muted-foreground"
+                    )}>
+                      {timeLeft}s
+                    </span>
+                  )}
+                </CardTitle>
                 <CardDescription>
                   Pencet urut: yang pertama = Player 1, kedua = Player 2, dst. ({currentRoundChoices.length}/{numPlayers} sudah pilih)
                 </CardDescription>
