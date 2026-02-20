@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 function fireCelebration() {
   const count = 80;
@@ -44,8 +45,10 @@ type RoundChoice = { playerIndex: number; option: string };
 type RoundResult = { round: number; choices: RoundChoice[] };
 
 type GameState = "settings" | "playing" | "summary";
+type GameType = "thisOrThat" | "wouldYouRather";
 
 export default function Home() {
+  const [gameType, setGameType] = useState<GameType>("thisOrThat");
   const [gameState, setGameState] = useState<GameState>("settings");
   const [category, setCategory] = useState<string>("random");
   const [numOptions, setNumOptions] = useState<number>(4);
@@ -70,11 +73,12 @@ export default function Home() {
   const fetchRoundOptions = useCallback(async () => {
     setError(null);
     setLoading(true);
+    const count = gameType === "wouldYouRather" ? 2 : numOptions;
     try {
       const res = await fetch("/api/game", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, count: numOptions }),
+        body: JSON.stringify({ category, count, gameType }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -87,7 +91,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [category, numOptions]);
+  }, [category, numOptions, gameType]);
 
   const startGame = useCallback(() => {
     setGameState("playing");
@@ -144,9 +148,63 @@ export default function Home() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 font-sans">
       <main className="w-full max-w-2xl space-y-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-3xl font-bold tracking-tight">This or That</h1>
+          <div
+            className="grid w-full max-w-[280px] grid-cols-2 rounded-lg border border-input bg-muted/30 p-0.5"
+            role="group"
+            aria-label="Pilih mode game"
+          >
+            <div className="relative min-w-0">
+              {gameType === "thisOrThat" && (
+                <motion.div
+                  layoutId="game-type-pill"
+                  className="absolute inset-0 rounded-md bg-primary"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "relative z-10 h-9 w-full rounded-md px-3 transition-colors",
+                  gameType === "thisOrThat" ? "text-primary-foreground hover:bg-transparent hover:text-primary-foreground" : "text-muted-foreground"
+                )}
+                onClick={() => setGameType("thisOrThat")}
+                disabled={gameState !== "settings"}
+              >
+                This or That
+              </Button>
+            </div>
+            <div className="relative min-w-0">
+              {gameType === "wouldYouRather" && (
+                <motion.div
+                  layoutId="game-type-pill"
+                  className="absolute inset-0 rounded-md bg-primary"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "relative z-10 h-9 w-full rounded-md px-3 transition-colors",
+                  gameType === "wouldYouRather" ? "text-primary-foreground hover:bg-transparent hover:text-primary-foreground" : "text-muted-foreground"
+                )}
+                onClick={() => setGameType("wouldYouRather")}
+                disabled={gameState !== "settings"}
+              >
+                Would You Rather
+              </Button>
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {gameType === "wouldYouRather" ? "Would You Rather" : "This or That"}
+          </h1>
           <p className="text-muted-foreground">
-            Pilih opsi, urutan pencet = urutan player. Di akhir ada ringkasan.
+            {gameType === "wouldYouRather"
+              ? "Pilih yang absurd. Urutan pencet = urutan player. Di akhir ada ringkasan."
+              : "Pilih opsi, urutan pencet = urutan player. Di akhir ada ringkasan."}
           </p>
         </div>
 
@@ -159,42 +217,50 @@ export default function Home() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.3 }}
           >
-          <Card>
+          <Card className="card-glow border-primary/10">
             <CardHeader>
               <CardTitle>Setup</CardTitle>
-              <CardDescription>Atur kategori, jumlah opsi, ronde, dan jumlah pemain.</CardDescription>
+              <CardDescription>
+                {gameType === "wouldYouRather"
+                  ? "Atur jumlah ronde dan jumlah pemain."
+                  : "Atur kategori, jumlah opsi, ronde, dan jumlah pemain."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Kategori</label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>
-                        {c.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Jumlah opsi per ronde (2–6)</label>
-                <Select value={String(numOptions)} onValueChange={(v) => setNumOptions(Number(v))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[2, 3, 4, 5, 6].map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        {n}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {gameType === "thisOrThat" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Kategori</label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {gameType === "thisOrThat" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Jumlah opsi per ronde (2–6)</label>
+                  <Select value={String(numOptions)} onValueChange={(v) => setNumOptions(Number(v))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2, 3, 4, 5, 6].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Jumlah ronde (1–10)</label>
                 <Select value={String(numRounds)} onValueChange={(v) => setNumRounds(Number(v))}>
@@ -241,7 +307,7 @@ export default function Home() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
           >
-          <Card>
+          <Card className="card-glow border-primary/10">
             <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
               <div>
                 <CardTitle>Ronde {currentRound} / {numRounds}</CardTitle>
@@ -259,7 +325,7 @@ export default function Home() {
               )}
               {loading && (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  {Array.from({ length: numOptions }).map((_, i) => (
+                  {Array.from({ length: gameType === "wouldYouRather" ? 2 : numOptions }).map((_, i) => (
                     <Skeleton key={i} className="h-20 rounded-lg" />
                   ))}
                 </div>
@@ -352,7 +418,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-          <Card>
+          <Card className="card-glow border-primary/10">
             <CardHeader>
               <CardTitle>Ringkasan</CardTitle>
               <CardDescription>Pilihan tiap pemain per ronde.</CardDescription>
