@@ -32,7 +32,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <footer className="flex flex-col items-center gap-2 py-6 text-center text-sm text-muted-foreground">
           <Link
-            href="https://github.com/Yudha/this-or-that"
+            href="https://github.com/Blawness/this-or-that"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-foreground/80 transition-colors hover:text-primary"

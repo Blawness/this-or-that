@@ -28,11 +28,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Contributions are welcome!
 
-- **GitHub:** [github.com/Yudha/this-or-that](https://github.com/Yudha/this-or-that)
+- **GitHub:** [github.com/Blawness/this-or-that](https://github.com/Blawness/this-or-that)
 - Open an issue or submit a pull request to suggest changes, fix bugs, or add features.
 
 ## Learn More
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Next.js Deployment](https://nextjs.org/docs/app/building-your-application/deploying) (e.g. [Vercel](https://vercel.com/new))
+
+
+## Made with love by [blawness](https://github.com/Blawness)(Yudha)❤️
 
