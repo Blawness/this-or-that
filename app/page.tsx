@@ -212,11 +212,11 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 font-sans">
-      <main className="w-full max-w-2xl space-y-6">
+    <div className="page-container flex min-h-screen flex-col items-center justify-center overflow-x-hidden bg-background px-3 py-4 font-sans sm:p-4 sm:py-6">
+      <main className="w-full max-w-2xl space-y-4 sm:space-y-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <div
-            className="grid w-full max-w-[280px] grid-cols-2 rounded-lg border border-input bg-muted/30 p-0.5"
+            className="grid w-full max-w-[280px] grid-cols-2 rounded-lg border border-input bg-muted/30 p-0.5 sm:max-w-[280px]"
             role="group"
             aria-label="Pilih mode game"
           >
@@ -233,7 +233,7 @@ export default function Home() {
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "relative z-10 h-9 w-full rounded-md px-3 transition-colors",
+                  "relative z-10 h-9 w-full rounded-md px-2 text-xs transition-colors sm:px-3 sm:text-sm",
                   gameType === "thisOrThat" ? "text-primary-foreground hover:bg-transparent hover:text-primary-foreground" : "text-muted-foreground"
                 )}
                 onClick={() => setGameType("thisOrThat")}
@@ -255,7 +255,7 @@ export default function Home() {
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "relative z-10 h-9 w-full rounded-md px-3 transition-colors",
+                  "relative z-10 h-9 w-full rounded-md px-2 text-xs transition-colors sm:px-3 sm:text-sm",
                   gameType === "wouldYouRather" ? "text-primary-foreground hover:bg-transparent hover:text-primary-foreground" : "text-muted-foreground"
                 )}
                 onClick={() => setGameType("wouldYouRather")}
@@ -265,10 +265,10 @@ export default function Home() {
               </Button>
             </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">
             {gameType === "wouldYouRather" ? "Would You Rather" : "This or That"}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="max-w-md text-sm text-muted-foreground sm:text-base">
             {gameType === "wouldYouRather"
               ? "Pilih yang absurd. Urutan pencet = urutan player. Di akhir ada ringkasan."
               : "Pilih opsi, urutan pencet = urutan player. Di akhir ada ringkasan."}
@@ -390,9 +390,9 @@ export default function Home() {
             transition={{ duration: 0.25 }}
           >
           <Card className="card-glow border-primary/10">
-            <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-              <div>
-                <CardTitle className="flex flex-wrap items-center gap-2">
+            <CardHeader className="flex flex-col gap-2 space-y-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <div className="min-w-0">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-base sm:text-lg">
                   Ronde {currentRound} / {numRounds}
                   {timeLeft !== null && !roundComplete && (
                     <span className={cn(
@@ -416,23 +416,27 @@ export default function Home() {
                 </p>
               )}
               {loading && (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <div
+                  className={cn(
+                    "grid gap-2 sm:gap-4",
+                    gameType === "wouldYouRather" ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"
+                  )}
+                >
                   {Array.from({ length: gameType === "wouldYouRather" ? 2 : numOptions }).map((_, i) => (
-                    <Skeleton key={i} className="h-20 rounded-lg" />
+                    <Skeleton key={i} className="h-14 rounded-lg sm:h-20" />
                   ))}
                 </div>
               )}
               {!loading && options && options.length > 0 && (
                 <motion.div
-                  className="grid gap-3 sm:grid-cols-2"
-                  style={{
-                    gridTemplateColumns:
-                      options.length <= 2
-                        ? "repeat(2, 1fr)"
-                        : options.length <= 4
-                          ? "repeat(2, 1fr)"
-                          : "repeat(3, 1fr)",
-                  }}
+                  className={cn(
+                    "grid gap-2 sm:gap-3",
+                    gameType === "wouldYouRather"
+                      ? "grid-cols-1"
+                      : options.length <= 4
+                        ? "grid-cols-2"
+                        : "grid-cols-2 sm:grid-cols-3"
+                  )}
                   initial="hidden"
                   animate="visible"
                   variants={{
@@ -469,12 +473,12 @@ export default function Home() {
                             <Button
                               variant={isChosen ? "default" : "outline"}
                               size="lg"
-                              className="min-h-16 w-full text-base"
+                              className="min-h-14 w-full whitespace-normal py-3 text-left text-sm sm:min-h-16 sm:text-base sm:py-4"
                               onClick={() => handleOptionClick(opt)}
                               disabled={currentRoundChoices.length >= numPlayers}
                             >
-                              <span className="text-center">{opt}</span>
-                              <span className="ml-2 flex flex-wrap items-center justify-center gap-1">
+                              <span className="block w-full text-center">{opt}</span>
+                              <span className="mt-1 flex flex-wrap items-center justify-center gap-1 sm:ml-2 sm:mt-0">
                                 <AnimatePresence>
                                   {chosenBy.map((c) => (
                                     <motion.span
@@ -515,11 +519,11 @@ export default function Home() {
               <CardTitle>Ringkasan</CardTitle>
               <CardDescription>Pilihan tiap pemain per ronde.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4 sm:space-y-6">
               {roundResults.map((r) => (
-                <div key={r.round} className="space-y-2">
-                  <h3 className="font-semibold">Ronde {r.round}</h3>
-                  <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                <div key={r.round} className="space-y-1.5 sm:space-y-2">
+                  <h3 className="text-sm font-semibold sm:text-base">Ronde {r.round}</h3>
+                  <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground sm:space-y-1 sm:text-sm">
                     {r.choices.map((c) => (
                       <li key={`${r.round}-${c.playerIndex}`}>
                         Player {c.playerIndex}: {c.option}
