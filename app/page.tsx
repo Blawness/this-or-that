@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useSound } from "@/hooks/use-sound";
 import { clickSoftSound } from "@/lib/click-soft";
-import { successChimeSound } from "@/lib/success-chime";
+import { switch002Sound } from "@/lib/switch-002";
 
 function fireCelebration() {
   const count = 80;
@@ -45,25 +45,27 @@ const CATEGORIES = [
 ] as const;
 
 type RoundChoice = { playerIndex: number; option: string };
-type RoundResult = { round: number; choices: RoundChoice[] };
+type RoundResult = { round: number; question?: string; choices: RoundChoice[] };
 
 type GameState = "settings" | "playing" | "summary";
 type GameType = "thisOrThat" | "wouldYouRather";
 
 export default function Home() {
   const [playClick] = useSound(clickSoftSound);
-  const [playSuccess] = useSound(successChimeSound);
+  const [playSuccess] = useSound(switch002Sound);
 
   const [gameType, setGameType] = useState<GameType>("thisOrThat");
   const [gameState, setGameState] = useState<GameState>("settings");
+  const [showSettings, setShowSettings] = useState(false);
   const [category, setCategory] = useState<string>("random");
   const [numOptions, setNumOptions] = useState<number>(4);
   const [numRounds, setNumRounds] = useState<number>(5);
-  const [numPlayers, setNumPlayers] = useState<number>(2);
+  const [numPlayers, setNumPlayers] = useState<number>(1);
   const [timerSeconds, setTimerSeconds] = useState<number>(5);
 
   const [currentRound, setCurrentRound] = useState(1);
   const [options, setOptions] = useState<string[] | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
   const [currentRoundChoices, setCurrentRoundChoices] = useState<RoundChoice[]>([]);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -96,6 +98,7 @@ export default function Home() {
         return;
       }
       setOptions(data.options ?? []);
+      setCurrentQuestion(typeof data.question === "string" ? data.question : null);
     } catch {
       setError("Failed to load. Try again.");
     } finally {
@@ -119,6 +122,7 @@ export default function Home() {
     setCurrentRound((r) => r + 1);
     setCurrentRoundChoices([]);
     setOptions(null);
+    setCurrentQuestion(null);
     fetchRoundOptions();
   }, [currentRound, numRounds, fetchRoundOptions]);
 
@@ -148,9 +152,9 @@ export default function Home() {
 
   useEffect(() => {
     if (gameState !== "playing" || timeLeft !== 0 || roundComplete) return;
-    playSuccess();
+    playSuccess({ volume: 0.5 });
     const choices = currentRoundChoices;
-    const result: RoundResult = { round: currentRound, choices };
+    const result: RoundResult = { round: currentRound, question: currentQuestion ?? undefined, choices };
     setRoundResults((prev) => [...prev, result]);
     setRoundComplete(true);
     if (nextRoundTimeoutRef.current) clearTimeout(nextRoundTimeoutRef.current);
@@ -158,7 +162,7 @@ export default function Home() {
       nextRoundTimeoutRef.current = null;
       goToNextRound();
     }, 1500);
-  }, [gameState, timeLeft, roundComplete, currentRound, currentRoundChoices, goToNextRound, playSuccess]);
+  }, [gameState, timeLeft, roundComplete, currentRound, currentRoundChoices, currentQuestion, goToNextRound, playSuccess]);
 
   const startGame = useCallback(() => {
     setGameState("playing");
@@ -166,8 +170,28 @@ export default function Home() {
     setRoundResults([]);
     setCurrentRoundChoices([]);
     setOptions(null);
+    setCurrentQuestion(null);
     setError(null);
     setTimeLeft(null);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = null;
+    fetchRoundOptions();
+  }, [fetchRoundOptions]);
+
+  const quickPlay = useCallback(() => {
+    setGameState("playing");
+    setCurrentRound(1);
+    setRoundResults([]);
+    setCurrentRoundChoices([]);
+    setOptions(null);
+    setCurrentQuestion(null);
+    setError(null);
+    setTimeLeft(null);
+    setCategory("random");
+    setNumOptions(4);
+    setNumRounds(5);
+    setNumPlayers(1);
+    setTimerSeconds(5);
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     timerIntervalRef.current = null;
     fetchRoundOptions();
@@ -183,7 +207,7 @@ export default function Home() {
       setCurrentRoundChoices(newChoices);
 
       if (newChoices.length === numPlayers) {
-        playSuccess();
+        playSuccess({ volume: 0.5 });
         if (timerIntervalRef.current) {
           clearInterval(timerIntervalRef.current);
           timerIntervalRef.current = null;
@@ -208,6 +232,7 @@ export default function Home() {
     setRoundResults([]);
     setCurrentRound(1);
     setOptions(null);
+    setCurrentQuestion(null);
     setCurrentRoundChoices([]);
   }, []);
 
@@ -285,97 +310,125 @@ export default function Home() {
             transition={{ duration: 0.3 }}
           >
           <Card className="card-glow border-primary/10">
-            <CardHeader>
-              <CardTitle>Setup</CardTitle>
-              <CardDescription>
-                {gameType === "wouldYouRather"
-                  ? "Atur jumlah ronde dan jumlah pemain."
-                  : "Atur kategori, jumlah opsi, ronde, dan jumlah pemain."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {gameType === "thisOrThat" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Kategori</label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORIES.map((c) => (
-                        <SelectItem key={c.value} value={c.value}>
-                          {c.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {gameType === "thisOrThat" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Jumlah opsi per ronde (2–6)</label>
-                  <Select value={String(numOptions)} onValueChange={(v) => setNumOptions(Number(v))}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[2, 3, 4, 5, 6].map((n) => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Jumlah ronde (1–10)</label>
-                <Select value={String(numRounds)} onValueChange={(v) => setNumRounds(Number(v))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        {n}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Jumlah pemain (2–6)</label>
-                <Select value={String(numPlayers)} onValueChange={(v) => setNumPlayers(Number(v))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[2, 3, 4, 5, 6].map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        {n}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Timer per ronde (3–10 detik)</label>
-                <Select value={String(timerSeconds)} onValueChange={(v) => setTimerSeconds(Number(v))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        {n} detik
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={startGame} size="lg" className="w-full">
-                Mulai main
+            <CardContent className="space-y-4 pt-6">
+              <Button onClick={quickPlay} size="lg" className="w-full text-base">
+                Main Sekarang
               </Button>
+              
+              <Button 
+                variant="outline" 
+                className="w-full flex items-center justify-between"
+                onClick={() => setShowSettings(!showSettings)}
+              >
+                <span>{showSettings ? "Sembunyikan Pengaturan" : "Pengaturan Lainnya"}</span>
+                <motion.span
+                  animate={{ rotate: showSettings ? 180 : 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </motion.span>
+              </Button>
+
+              <AnimatePresence>
+                {showSettings && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-4 pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        {gameType === "wouldYouRather"
+                          ? "Atur jumlah ronde dan jumlah pemain."
+                          : "Atur kategori, jumlah opsi, ronde, dan jumlah pemain."}
+                      </p>
+                      {gameType === "thisOrThat" && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Kategori</label>
+                          <Select value={category} onValueChange={setCategory}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CATEGORIES.map((c) => (
+                                <SelectItem key={c.value} value={c.value}>
+                                  {c.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {gameType === "thisOrThat" && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Jumlah opsi per ronde (2–6)</label>
+                          <Select value={String(numOptions)} onValueChange={(v) => setNumOptions(Number(v))}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[2, 3, 4, 5, 6].map((n) => (
+                                <SelectItem key={n} value={String(n)}>
+                                  {n}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Jumlah ronde (1–10)</label>
+                        <Select value={String(numRounds)} onValueChange={(v) => setNumRounds(Number(v))}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Jumlah pemain (1–4)</label>
+                        <Select value={String(numPlayers)} onValueChange={(v) => setNumPlayers(Number(v))}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[1, 2, 3, 4].map((n) => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Timer per ronde (3–10 detik)</label>
+                        <Select value={String(timerSeconds)} onValueChange={(v) => setTimerSeconds(Number(v))}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n} detik
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </CardContent>
           </Card>
           </motion.div>
@@ -404,12 +457,19 @@ export default function Home() {
                   )}
                 </CardTitle>
                 <CardDescription>
-                  Pencet urut: yang pertama = Player 1, kedua = Player 2, dst. ({currentRoundChoices.length}/{numPlayers} sudah pilih)
+                  {numPlayers === 1 
+                    ? "Pilih satu opsi" 
+                    : `Pencet urut: yang pertama = Player 1, kedua = Player 2, dst. (${currentRoundChoices.length}/${numPlayers} sudah pilih)`}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {error && <p className="text-sm text-destructive">{error}</p>}
+              {currentQuestion && (
+                <p className="text-center text-base font-medium sm:text-lg">
+                  {currentQuestion}
+                </p>
+              )}
               {roundComplete && (
                 <p className="text-center text-sm font-medium text-muted-foreground">
                   Ronde selesai! Next round in 1.5s…
@@ -520,9 +580,12 @@ export default function Home() {
               <CardDescription>Pilihan tiap pemain per ronde.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 sm:space-y-6">
-              {roundResults.map((r) => (
-                <div key={r.round} className="space-y-1.5 sm:space-y-2">
+              {roundResults.map((r, index) => (
+                <div key={`round-${index}-${r.round}`} className="space-y-1.5 sm:space-y-2">
                   <h3 className="text-sm font-semibold sm:text-base">Ronde {r.round}</h3>
+                  {r.question && (
+                    <p className="text-xs italic text-muted-foreground sm:text-sm">&ldquo;{r.question}&rdquo;</p>
+                  )}
                   <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground sm:space-y-1 sm:text-sm">
                     {r.choices.map((c) => (
                       <li key={`${r.round}-${c.playerIndex}`}>

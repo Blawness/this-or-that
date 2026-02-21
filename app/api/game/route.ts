@@ -27,6 +27,22 @@ function pickRandom<T>(arr: T[], n: number): T[] {
   return shuffled.slice(0, n);
 }
 
+function getQuestionForRound(
+  gameType: (typeof GAME_TYPES)[number],
+  category: string
+): string {
+  if (gameType === "wouldYouRather") {
+    return "Lebih mau yang mana?";
+  }
+  const questions: Record<string, string> = {
+    makanan: "Makanan apa yang kamu suka?",
+    travel: "Destinasi travel mana yang kamu pilih?",
+    entertainment: "Hiburan apa yang kamu pilih?",
+    random: "Mana yang kamu pilih?",
+  };
+  return questions[category] ?? questions.random;
+}
+
 export async function POST(request: NextRequest) {
   let category = "random";
   let count = 4;
@@ -58,16 +74,19 @@ export async function POST(request: NextRequest) {
       }
       const pair = pickRandom(pairs, 1)[0];
       const options = [pair[0], pair[1]];
-      return NextResponse.json({ options });
+      const question = getQuestionForRound(gameType, category);
+      return NextResponse.json({ options, question });
     }
 
     const data = getVariables();
     let pool: string[] = [];
+    let selectedCategory = category;
+
     if (category === "random") {
-      const all = (ALLOWED_CATEGORIES as readonly string[])
-        .filter((k) => k !== "random")
-        .flatMap((k) => data[k] ?? []);
-      pool = all;
+      // Pick a random category first, then get all options from that category
+      const categories = (ALLOWED_CATEGORIES as readonly string[]).filter((k) => k !== "random");
+      selectedCategory = categories[Math.floor(Math.random() * categories.length)];
+      pool = data[selectedCategory] ?? [];
     } else {
       pool = data[category] ?? [];
     }
@@ -80,7 +99,8 @@ export async function POST(request: NextRequest) {
     }
 
     const options = pickRandom(pool, count);
-    return NextResponse.json({ options });
+    const question = getQuestionForRound(gameType, selectedCategory);
+    return NextResponse.json({ options, question, selectedCategory });
   } catch (err) {
     console.error("Game API error:", err);
     return NextResponse.json(
